@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Brain Duel: Culture Clash</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <style>
+    /* 核心底色 + 手机一屏锁定（禁止滚动） */
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      height: 100dvh;
+      max-height: 100dvh;
+      overflow: hidden;
+      position: fixed;
+      inset: 0;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      touch-action: manipulation;
+      overscroll-behavior: none;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      color: #f8fafc;
+      background: linear-gradient(180deg, #0f172a 0%, #3b0764 45%, #0f172a 100%);
+    }
+
+    .neon-title {
+      background: linear-gradient(135deg, #22d3ee, #a78bfa, #f472b6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .glass-card {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(34, 211, 238, 0.25);
+      border-radius: 1rem;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+
+    .btn-cyan {
+      background: linear-gradient(90deg, #06b6d4, #2563eb);
+      color: #fff;
+      border: none;
+      box-shadow: 0 8px 24px rgba(6, 182, 212, 0.35);
+    }
+    .btn-fuchsia {
+      background: linear-gradient(90deg, #d946ef, #9333ea);
+      color: #fff;
+      border: none;
+      box-shadow: 0 8px 24px rgba(217, 70, 239, 0.35);
+    }
+    .btn-replay {
+      background: linear-gradient(90deg, #06b6d4, #9333ea);
+      color: #fff;
+      border: none;
+    }
+
+    .score-bar-fill {
+      transition: width 0.6s ease-out;
+    }
+    .score-bar-fill.bar-glow {
+      box-shadow: 0 0 12px rgba(34, 211, 238, 0.8);
+    }
+    .score-bar-fill.bot-glow {
+      box-shadow: 0 0 12px rgba(248, 113, 113, 0.8);
+    }
+    .bar-player {
+      background: linear-gradient(90deg, #60a5fa, #22d3ee);
+    }
+    .bar-bot {
+      background: linear-gradient(90deg, #ef4444, #fb923c);
+    }
+    .bar-track {
+      background: #334155;
+      border-radius: 9999px;
+      height: 0.5rem;
+      overflow: hidden;
+    }
+
+    .timer-ring {
+      transform: rotate(-90deg);
+      transform-origin: 50% 50%;
+    }
+    .timer-ring circle {
+      transition: stroke-dashoffset 0.08s linear;
+    }
+
+    @keyframes scorePop {
+      0% { opacity: 0; transform: translateY(8px) scale(0.8); }
+      20% { opacity: 1; transform: translateY(0) scale(1.1); }
+      80% { opacity: 1; transform: translateY(-12px) scale(1); }
+      100% { opacity: 0; transform: translateY(-24px) scale(0.9); }
+    }
+    .score-pop { animation: scorePop 1.5s forwards; }
+
+    @keyframes dotBounce {
+      0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+      40% { transform: scale(1); opacity: 1; }
+    }
+    .loading-dot { animation: dotBounce 1.2s infinite ease-in-out; }
+    .loading-dot:nth-child(2) { animation-delay: 0.15s; }
+    .loading-dot:nth-child(3) { animation-delay: 0.3s; }
+
+    /* 屏幕切换：固定一屏高度，禁止内部滚动 */
+    .screen {
+      display: none;
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      height: 100dvh;
+      max-height: 100dvh;
+      flex-direction: column;
+      overflow: hidden;
+      box-sizing: border-box;
+      background: linear-gradient(180deg, #0f172a 0%, #3b0764 45%, #0f172a 100%);
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+    .screen.active {
+      display: flex;
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    @keyframes matchSlideIn {
+      from { opacity: 0; transform: translateX(40px) scale(0.9); }
+      to { opacity: 1; transform: translateX(0) scale(1); }
+    }
+    .opponent-card-enter { animation: matchSlideIn 0.5s ease-out forwards; }
+
+    @keyframes thinkingPulse {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 1; }
+    }
+    .bot-thinking { animation: thinkingPulse 1s ease-in-out infinite; }
+
+    @keyframes comboPulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.08); }
+    }
+    #player-combo.combo-show, #bot-combo.combo-show {
+      animation: comboPulse 0.6s ease-in-out;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .match-spinner {
+      width: 5rem;
+      height: 5rem;
+      margin: 0 auto 1rem;
+      border: 4px solid rgba(34, 211, 238, 0.3);
+      border-top-color: #22d3ee;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    /* 手机内容区：宽屏时也保持手机列宽，居中 */
+    .mobile-shell {
+      width: 100%;
+      max-width: min(24rem, calc(100vw - 2rem));
+      margin: 0 auto;
+      padding: 0 1.25rem;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    @media (max-width: 480px) {
+      .mobile-shell {
+        max-width: 100%;
+        padding: 0 1.5rem;
+      }
+      .home-screen {
+        width: 100%;
+        min-height: min(32rem, 85dvh);
+      }
+      .home-actions button {
+        min-height: 3rem;
+      }
+    }
+
+    #screen-home.active,
+    #screen-matching.active,
+    #screen-result.active {
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: max(0.75rem, env(safe-area-inset-top)) 0 max(0.75rem, env(safe-area-inset-bottom));
+    }
+
+    /* 主页：纵向铺满手机视口 */
+    .home-screen {
+      flex: 0 1 auto;
+      max-height: 100%;
+      justify-content: center;
+      gap: clamp(1.5rem, 6vh, 3rem);
+    }
+    .home-hero { text-align: center; }
+    .home-logo {
+      font-size: clamp(2.25rem, 10vw, 3.25rem);
+      margin-bottom: 0.5rem;
+      display: block;
+    }
+    .home-title {
+      font-size: clamp(1.45rem, 5.5vw, 1.85rem);
+      line-height: 1.2;
+      margin: 0;
+    }
+    .home-subtitle {
+      margin-top: 0.5rem;
+      font-size: clamp(0.75rem, 3.2vw, 0.875rem);
+    }
+    .home-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      width: 100%;
+    }
+    .home-actions button {
+      width: 100%;
+      padding: clamp(0.85rem, 2.5vh, 1rem) 1rem;
+      font-size: clamp(0.95rem, 3.8vw, 1.05rem);
+      border-radius: 1rem;
+      box-sizing: border-box;
+    }
+
+    /* 匹配页 */
+    .match-inner { width: 100%; text-align: center; }
+    .match-spinner { width: 3.5rem; height: 3.5rem; margin-bottom: 0.75rem; }
+
+    /* 结算页紧凑 */
+    .result-card { max-width: 22rem; width: 100%; padding: 1.25rem !important; max-height: calc(100dvh - 2rem); overflow: hidden; }
+    .result-icon { font-size: 2.75rem !important; margin-bottom: 0.5rem !important; }
+    .result-title { font-size: 1.75rem !important; margin-bottom: 0.25rem !important; }
+
+    /* 对战页：整页居中，一屏内展示 */
+    #screen-battle.active {
+      align-items: center;
+      justify-content: center;
+      padding: max(0.5rem, env(safe-area-inset-top)) 0 max(0.5rem, env(safe-area-inset-bottom));
+    }
+    .battle-shell {
+      flex: 0 1 auto;
+      width: 100%;
+      max-width: min(26rem, calc(100vw - 1.5rem));
+      max-height: calc(100dvh - 1rem);
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      overflow: hidden;
+      gap: 0.35rem;
+    }
+    .battle-panel { flex-shrink: 0; padding: 0.5rem 0.65rem !important; margin-bottom: 0.35rem !important; border-radius: 0.75rem !important; }
+    .battle-lead-row { margin-bottom: 0.15rem !important; min-height: 0; }
+    .battle-avatar { width: 2rem !important; height: 2rem !important; font-size: 0.85rem !important; }
+    .battle-score-label { font-size: 0.65rem !important; margin-top: 0.15rem !important; }
+    .bar-track { height: 0.35rem !important; margin-top: 0.25rem !important; }
+
+    .battle-timer-wrap { flex-shrink: 0; margin-bottom: 0.25rem !important; }
+    .battle-timer-box { width: 3.75rem; height: 3.75rem; margin: 0 auto; position: relative; }
+    .battle-timer-box .timer-ring { width: 3.75rem; height: 3.75rem; display: block; }
+    #countdown-num {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.15rem;
+    }
+
+    .battle-question { flex-shrink: 0; padding: 0.5rem 0.65rem !important; margin-bottom: 0.35rem !important; }
+    .battle-question-text {
+      font-size: 0.9rem !important;
+      line-height: 1.35 !important;
+      min-height: 0 !important;
+      margin: 0;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    #options-container {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+      overflow: hidden;
+    }
+
+    .option-btn {
+      flex: 1 1 0;
+      min-height: 2.25rem;
+      max-height: 3.5rem;
+      padding: 0.35rem 0.55rem;
+      font-size: 0.78rem;
+      line-height: 1.25;
+      border-radius: 0.65rem;
+      display: flex;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #f8fafc;
+      cursor: pointer;
+    }
+    .option-btn .opt-letter {
+      width: 1.35rem;
+      height: 1.35rem;
+      line-height: 1.35rem;
+      font-size: 0.65rem;
+      margin-right: 0.4rem;
+      flex-shrink: 0;
+      border-radius: 0.35rem;
+      background: rgba(168, 85, 247, 0.35);
+      text-align: center;
+    }
+
+    @media (max-height: 640px) {
+      .home-logo { font-size: 2rem; }
+      .home-title { font-size: 1.4rem; }
+      .battle-timer-box { width: 3.25rem; height: 3.25rem; }
+      .battle-timer-box .timer-ring { width: 3.25rem; height: 3.25rem; }
+      .option-btn { font-size: 0.72rem !important; min-height: 2rem; }
+    }
+    .option-btn:hover { background: rgba(255, 255, 255, 0.12); }
+    .option-locked { pointer-events: none; opacity: 0.55; }
+    .option-bot-pick { box-shadow: 0 0 0 2px #f87171; }
+    .option-player-pick { box-shadow: 0 0 0 2px #facc15; }
+    .option-correct { background: #22c55e !important; border-color: #4ade80 !important; color: #fff !important; }
+    .option-picked { background: rgba(250, 204, 21, 0.85) !important; color: #0f172a !important; }
+
+    .category-tag-lang { background: rgba(34, 211, 238, 0.2); color: #67e8f9; }
+    .category-tag-geo { background: rgba(74, 222, 128, 0.2); color: #86efac; }
+    .category-tag-culture { background: rgba(192, 132, 252, 0.2); color: #d8b4fe; }
+    .category-tag-history { background: rgba(251, 191, 36, 0.2); color: #fcd34d; }
+
+    .text-muted { color: #94a3b8; }
+    .text-cyan { color: #67e8f9; }
+    .text-purple { color: #d8b4fe; }
+    .text-blue { color: #93c5fd; }
+    .text-red { color: #fca5a5; }
+    .text-amber { color: #fcd34d; }
+    .avatar-player {
+      background: rgba(59, 130, 246, 0.25);
+      border: 2px solid #60a5fa;
+    }
+    .avatar-bot {
+      background: rgba(239, 68, 68, 0.25);
+      border: 2px solid #f87171;
+    }
+
+    .is-hidden { display: none !important; }
+  </style>
+</head>
+<body class="text-white font-sans">
+
+  <!-- ========== 界面1：主页 ========== -->
+  <div id="screen-home" class="screen active">
+    <div class="mobile-shell home-screen">
+      <div class="home-hero">
+        <i class="fa-solid fa-brain text-cyan-400 home-logo"></i>
+        <h1 class="neon-title home-title font-extrabold">Brain Duel:<br />Culture Clash</h1>
+        <p class="text-muted home-subtitle">世界文化 · 语言知识 · 1v1 极速对战</p>
+      </div>
+      <div class="home-actions">
+        <button id="btn-match" type="button" class="btn-cyan font-bold">
+          <i class="fa-solid fa-globe mr-2"></i>匹配全球玩家
+        </button>
+        <button id="btn-invite" type="button" class="btn-fuchsia font-bold">
+          <i class="fa-solid fa-user-group mr-2"></i>邀请好友
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 界面2：匹配 Loading ========== -->
+  <div id="screen-matching" class="screen">
+    <div class="mobile-shell match-inner">
+      <div class="match-spinner"></div>
+      <p class="text-cyan font-semibold" style="font-size:1rem">正在寻找对手...</p>
+      <div class="flex justify-center gap-2" style="margin:0.5rem 0;display:flex;gap:0.5rem;justify-content:center">
+        <span class="loading-dot w-2 h-2 rounded-full bg-cyan-400"></span>
+        <span class="loading-dot w-2 h-2 rounded-full bg-cyan-400"></span>
+        <span class="loading-dot w-2 h-2 rounded-full bg-cyan-400"></span>
+      </div>
+      <!-- 对手预览卡片 -->
+      <div id="opponent-preview" class="opacity-0 glass-card p-4 flex items-center gap-4" style="border-color:rgba(248,113,113,0.35)">
+        <div id="match-avatar" class="w-14 h-14 rounded-full bg-red-500/30 border-2 border-red-400 flex items-center justify-center text-2xl shrink-0">
+          <i class="fa-solid fa-robot text-red-300"></i>
+        </div>
+        <div class="text-left flex-1 min-w-0">
+          <p id="match-name" class="font-bold truncate">---</p>
+          <p id="match-meta" class="text-xs text-slate-400 mt-0.5">---</p>
+          <p id="match-rank" class="text-xs text-amber-400 mt-1"><i class="fa-solid fa-medal mr-1"></i>---</p>
+        </div>
+        <span id="match-flag" class="text-3xl shrink-0">🌐</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 界面3：对战 ========== -->
+  <div id="screen-battle" class="screen">
+    <div class="mobile-shell battle-shell">
+    <!-- 顶部计分板 -->
+    <div class="glass-card battle-panel">
+      <div class="flex items-center justify-center gap-2 battle-lead-row">
+        <span id="lead-badge" class="text-xs font-bold px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 is-hidden"></span>
+      </div>
+      <div class="flex items-start justify-between gap-2">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 relative">
+            <div class="rounded-full avatar-player battle-avatar flex items-center justify-center shrink-0">
+              <i class="fa-solid fa-user text-blue-300"></i>
+            </div>
+            <div>
+              <span class="font-bold text-sm">Player</span>
+              <span id="player-combo" class="is-hidden ml-1 text-xs text-yellow-400 font-bold"></span>
+            </div>
+            <div id="player-score-pop" class="absolute -top-1 left-12 text-yellow-300 font-bold text-sm pointer-events-none"></div>
+          </div>
+          <div class="mt-2 bar-track">
+            <div id="player-bar" class="score-bar-fill bar-player h-full rounded-full" style="width:0%;height:100%"></div>
+          </div>
+          <p id="player-score-text" class="text-blue battle-score-label">0 / 1000</p>
+        </div>
+        <span class="text-slate-500 font-bold text-xs pt-3 shrink-0">VS</span>
+        <div class="flex-1 min-w-0 text-right">
+          <div class="flex items-center justify-end gap-2 relative">
+            <div id="bot-score-pop" class="absolute -top-1 right-12 text-yellow-300 font-bold text-sm pointer-events-none"></div>
+            <div class="text-right">
+              <span id="bot-display-name" class="font-bold text-sm">Bot</span>
+              <span id="bot-combo" class="is-hidden ml-1 text-xs text-orange-400 font-bold"></span>
+              <p id="bot-status" class="text-[10px] text-red-300 bot-thinking is-hidden">思考中...</p>
+            </div>
+            <div id="battle-bot-avatar" class="rounded-full avatar-bot battle-avatar flex items-center justify-center shrink-0">
+              🤖
+            </div>
+          </div>
+          <div class="mt-2 bar-track">
+            <div id="bot-bar" class="score-bar-fill bar-bot h-full rounded-full" style="width:0%;height:100%;margin-left:auto"></div>
+          </div>
+          <p id="bot-score-text" class="text-red battle-score-label">0 / 1000</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 倒计时 -->
+    <div class="battle-timer-wrap flex justify-center">
+      <div class="battle-timer-box">
+        <svg class="timer-ring" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="6" />
+          <circle id="timer-progress" cx="50" cy="50" r="42" fill="none"
+            stroke="url(#timerGrad)" stroke-width="6" stroke-linecap="round"
+            stroke-dasharray="263.89" stroke-dashoffset="0" />
+          <defs>
+            <linearGradient id="timerGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#22d3ee" />
+              <stop offset="100%" stop-color="#a78bfa" />
+            </linearGradient>
+          </defs>
+        </svg>
+        <span id="countdown-num" class="absolute inset-0 flex items-center justify-center font-extrabold text-white tabular-nums battle-timer-num">10.0</span>
+      </div>
+    </div>
+
+    <!-- 题目区 -->
+    <div class="glass-card battle-panel battle-question relative" style="border-color:rgba(192,132,252,0.25)">
+      <div class="flex items-center justify-between gap-2 mb-2 pr-2">
+        <span id="question-category" class="text-[10px] px-2 py-0.5 rounded-full font-semibold category-tag-lang">语言</span>
+        <span id="question-index" class="text-xs text-purple-300 font-semibold shrink-0">第 1/5 题</span>
+      </div>
+      <p id="question-text" class="battle-question-text font-bold">加载中...</p>
+    </div>
+
+    <!-- 选项区 -->
+    <div id="options-container"></div>
+
+    </div>
+  </div>
+
+  <!-- ========== 界面4：结算 ========== -->
+  <div id="screen-result" class="screen">
+    <div class="mobile-shell">
+    <div class="glass-card result-card text-center" style="border-radius:1.5rem">
+      <i id="result-icon" class="fa-solid fa-trophy text-amber result-icon"></i>
+      <h2 id="result-title" class="font-extrabold neon-title result-title">Victory</h2>
+      <p id="result-subtitle" class="text-slate-400 mb-4">胜利</p>
+      <div class="flex justify-around mb-4 text-sm">
+        <div>
+          <p class="text-slate-400">Player</p>
+          <p id="final-player-score" class="text-2xl font-bold text-blue-400">0</p>
+        </div>
+        <div class="text-slate-600 self-center">VS</div>
+        <div>
+          <p id="final-bot-name" class="text-slate-400">Bot</p>
+          <p id="final-bot-score" class="text-2xl font-bold text-red-400">0</p>
+        </div>
+      </div>
+      <!-- 薄弱项分析 -->
+      <div id="weak-analysis" class="text-left mb-6 p-3 glass-card is-hidden" style="border-color:rgba(251,191,36,0.3)">
+        <p class="text-xs text-amber-300 font-bold mb-2"><i class="fa-solid fa-chart-pie mr-1"></i>本局薄弱项</p>
+        <ul id="weak-list" class="text-xs text-slate-400 space-y-1"></ul>
+      </div>
+      <button id="btn-replay" type="button"
+        class="btn-replay font-bold" style="width:100%;padding:0.85rem;border-radius:1rem;margin-top:0.5rem">
+        <i class="fa-solid fa-rotate-right mr-2"></i>再来一局
+      </button>
+    </div>
+    </div>
+  </div>
+
+  <script>
+    // ============================================================
+    // === 题库（含分类标签）===
+    // ============================================================
+    const CATEGORY_LABELS = {
+      language: '语言',
+      geography: '地理',
+      culture: '文化',
+      history: '历史'
+    };
+
+    const QUESTION_BANK = [
+      { text: '「你好」用日语怎么说？', options: ['Konnichiwa', 'Sayonara', 'Arigatou', 'Sumimasen'], correct: 0, category: 'language' },
+      { text: '法国的首都是哪座城市？', options: ['里昂', '马赛', '巴黎', '尼斯'], correct: 2, category: 'geography' },
+      { text: '阿拉伯数字「0」经哪条路径传播到欧洲？', options: ['古希腊', '印度经阿拉伯', '古埃及', '玛雅'], correct: 1, category: 'history' },
+      { text: '英语「Thank you」最接近？', options: ['再见', '谢谢', '对不起', '请'], correct: 1, category: 'language' },
+      { text: '巴西的官方语言是？', options: ['西班牙语', '葡萄牙语', '英语', '法语'], correct: 1, category: 'geography' },
+      { text: '「寿司」起源于哪个国家？', options: ['中国', '韩国', '日本', '泰国'], correct: 2, category: 'culture' },
+      { text: '联合国六种工作语言不包括？', options: ['阿拉伯语', '印地语', '俄语', '西班牙语'], correct: 1, category: 'language' },
+      { text: '古希腊智慧女神是？', options: ['赫拉', '雅典娜', '阿芙洛狄忒', '阿尔忒弥斯'], correct: 1, category: 'history' },
+      { text: '「Hola」常见于哪个国家？', options: ['意大利', '西班牙', '德国', '荷兰'], correct: 1, category: 'language' },
+      { text: '母语使用人数最多的是？', options: ['英语', '西班牙语', '汉语', '印地语'], correct: 2, category: 'language' },
+      { text: '「元宵节」吃汤圆象征什么？', options: ['团圆', '祈福', '祭祖', '庆丰收'], correct: 0, category: 'culture' },
+      { text: '埃菲尔铁塔位于？', options: ['伦敦', '柏林', '巴黎', '罗马'], correct: 2, category: 'geography' },
+      { text: '「Bonjour」是哪种语言？', options: ['德语', '法语', '意大利语', '荷兰语'], correct: 1, category: 'language' },
+      { text: '玛雅文明主要分布在中美洲的？', options: ['墨西哥尤卡坦', '秘鲁安第斯', '巴西平原', '美国西部'], correct: 0, category: 'history' },
+      { text: '韩国传统服饰称为？', options: ['和服', '汉服', '韩服', '纱丽'], correct: 2, category: 'culture' },
+      { text: '尼罗河主要流经哪个大洲？', options: ['亚洲', '非洲', '欧洲', '南美洲'], correct: 1, category: 'geography' },
+      { text: '「Shalom」在希伯来语中常用作？', options: ['问候/平安', '告别', '感谢', '道歉'], correct: 0, category: 'language' },
+      { text: '奥林匹克运动会起源于？', options: ['古罗马', '古希腊', '古埃及', '古中国'], correct: 1, category: 'history' },
+      { text: '印度教圣河「恒河」注入？', options: ['阿拉伯海', '孟加拉湾', '红海', '波斯湾'], correct: 1, category: 'geography' },
+      { text: '茶道文化「抹茶」源自哪个国家？', options: ['中国', '日本', '韩国', '越南'], correct: 0, category: 'culture' }
+    ];
+
+    const OPPONENT_POOL = [
+      { name: 'Yuki_Tokyo', flag: '🇯🇵', rank: '黄金 III' },
+      { name: 'Marco_Roma', flag: '🇮🇹', rank: '铂金 II' },
+      { name: 'Sofia_Madrid', flag: '🇪🇸', rank: '白银 I' },
+      { name: 'Alex_Berlin', flag: '🇩🇪', rank: '钻石 V' },
+      { name: 'Luna_Seoul', flag: '🇰🇷', rank: '黄金 I' },
+      { name: 'Omar_Cairo', flag: '🇪🇬', rank: '青铜 I' },
+      { name: 'Emma_London', flag: '🇬🇧', rank: '铂金 IV' },
+      { name: 'Carlos_BR', flag: '🇧🇷', rank: '黄金 II' }
+    ];
+
+    const MAX_SCORE = 1000;
+    const QUESTIONS_PER_ROUND = 5;
+    const COUNTDOWN_MS = 10000;
+    const CIRCUMFERENCE = 2 * Math.PI * 42;
+    const COMBO_BONUS_RATE = 0.1; // 每连击 +10%，上限 40%
+    const BIG_SCORE_THRESHOLD = 150;
+    const PLAYER_NEXT_MS = 900; // 玩家选题后短暂展示正确答案再下一题
+
+    // ============================================================
+    // === 游戏状态 ===
+    // ============================================================
+    const gameState = {
+      screen: 'home',
+      questions: [],
+      currentIndex: 0,
+      scores: { player: 0, bot: 0 },
+      combos: { player: 0, bot: 0 },
+      phase: 'question',
+      playerAnswer: null,
+      botAnswer: null,
+      playerRemainingMs: 0,
+      botRemainingMs: 0,
+      playerTimeMs: 0,
+      botTimeMs: 0,
+      remainingMs: COUNTDOWN_MS,
+      questionStartAt: 0,
+      countdownRaf: null,
+      timers: [],
+      opponent: null,
+      categoryStats: {},
+      optionsLocked: false,
+      lastSfxTickSecond: -1,
+      botScheduledForIndex: -1
+    };
+
+    const screens = {
+      home: document.getElementById('screen-home'),
+      matching: document.getElementById('screen-matching'),
+      battle: document.getElementById('screen-battle'),
+      result: document.getElementById('screen-result')
+    };
+
+    const els = {
+      playerBar: document.getElementById('player-bar'),
+      botBar: document.getElementById('bot-bar'),
+      playerScoreText: document.getElementById('player-score-text'),
+      botScoreText: document.getElementById('bot-score-text'),
+      playerScorePop: document.getElementById('player-score-pop'),
+      botScorePop: document.getElementById('bot-score-pop'),
+      playerCombo: document.getElementById('player-combo'),
+      botCombo: document.getElementById('bot-combo'),
+      leadBadge: document.getElementById('lead-badge'),
+      countdownNum: document.getElementById('countdown-num'),
+      timerProgress: document.getElementById('timer-progress'),
+      questionIndex: document.getElementById('question-index'),
+      questionText: document.getElementById('question-text'),
+      questionCategory: document.getElementById('question-category'),
+      optionsContainer: document.getElementById('options-container'),
+      botStatus: document.getElementById('bot-status'),
+      botDisplayName: document.getElementById('bot-display-name'),
+      battleBotAvatar: document.getElementById('battle-bot-avatar'),
+      opponentPreview: document.getElementById('opponent-preview'),
+      matchName: document.getElementById('match-name'),
+      matchMeta: document.getElementById('match-meta'),
+      matchRank: document.getElementById('match-rank'),
+      matchFlag: document.getElementById('match-flag'),
+      matchAvatar: document.getElementById('match-avatar'),
+      resultTitle: document.getElementById('result-title'),
+      resultSubtitle: document.getElementById('result-subtitle'),
+      resultIcon: document.getElementById('result-icon'),
+      finalPlayerScore: document.getElementById('final-player-score'),
+      finalBotScore: document.getElementById('final-bot-score'),
+      finalBotName: document.getElementById('final-bot-name'),
+      weakAnalysis: document.getElementById('weak-analysis'),
+      weakList: document.getElementById('weak-list')
+    };
+
+    // ============================================================
+    // === 音效（Web Audio API，无需外部文件）===
+    // ============================================================
+    let audioCtx = null;
+
+    function ensureAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+
+    function playTone(freq, duration, type = 'sine', volume = 0.15) {
+      try {
+        ensureAudio();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(volume, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch (_) { /* 静默失败 */ }
+    }
+
+    function sfxTick() { playTone(880, 0.06, 'square', 0.08); }
+    function sfxCorrect() { playTone(523, 0.1); setTimeout(() => playTone(784, 0.15), 80); }
+    function sfxWrong() { playTone(200, 0.2, 'sawtooth', 0.12); }
+    function sfxReveal() { playTone(440, 0.08); setTimeout(() => playTone(660, 0.12), 60); }
+    function sfxMatch() { playTone(392, 0.1); setTimeout(() => playTone(523, 0.1), 100); setTimeout(() => playTone(659, 0.15), 200); }
+
+    function vibrate(pattern) {
+      if (navigator.vibrate) navigator.vibrate(pattern);
+    }
+
+    // ============================================================
+    // === 工具函数 ===
+    // ============================================================
+    function shuffle(array) {
+      const arr = [...array];
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    function pickOpponent() {
+      return OPPONENT_POOL[Math.floor(Math.random() * OPPONENT_POOL.length)];
+    }
+
+    function addTimer(id) {
+      gameState.timers.push(id);
+      return id;
+    }
+
+    function clearTimers() {
+      gameState.timers.forEach((id) => {
+        clearInterval(id);
+        clearTimeout(id);
+        cancelAnimationFrame(id);
+      });
+      gameState.timers = [];
+      if (gameState.countdownRaf) {
+        cancelAnimationFrame(gameState.countdownRaf);
+        gameState.countdownRaf = null;
+      }
+    }
+
+    function showScreen(name) {
+      gameState.screen = name;
+      Object.values(screens).forEach((el) => el.classList.remove('active'));
+      screens[name].classList.add('active');
+    }
+
+    /** 毫秒级计分：100 + 剩余百分秒 * 1（最高 200） */
+    function calcBaseScore(answerIndex, correctIndex, remainingMs) {
+      if (answerIndex === null || answerIndex !== correctIndex) return 0;
+      return 100 + Math.round(remainingMs / 100);
+    }
+
+    function getComboMultiplier(combo) {
+      if (combo <= 1) return 1;
+      return 1 + Math.min(combo - 1, 4) * COMBO_BONUS_RATE;
+    }
+
+    function calcFinalScore(base, combo) {
+      return Math.round(base * getComboMultiplier(combo));
+    }
+
+    function formatTime(ms) {
+      return (ms / 1000).toFixed(1) + 's';
+    }
+
+    function optionLetter(idx) {
+      return String.fromCharCode(65 + idx);
+    }
+
+    function updateScoreBars(playerPoints = 0, botPoints = 0) {
+      const pPct = Math.min((gameState.scores.player / MAX_SCORE) * 100, 100);
+      const bPct = Math.min((gameState.scores.bot / MAX_SCORE) * 100, 100);
+      els.playerBar.style.width = `${pPct}%`;
+      els.botBar.style.width = `${bPct}%`;
+      els.playerScoreText.textContent = `${gameState.scores.player} / ${MAX_SCORE}`;
+      els.botScoreText.textContent = `${gameState.scores.bot} / ${MAX_SCORE}`;
+
+      if (playerPoints >= BIG_SCORE_THRESHOLD) {
+        els.playerBar.classList.add('bar-glow');
+        setTimeout(() => els.playerBar.classList.remove('bar-glow'), 800);
+      }
+      if (botPoints >= BIG_SCORE_THRESHOLD) {
+        els.botBar.classList.add('bot-glow');
+        setTimeout(() => els.botBar.classList.remove('bot-glow'), 800);
+      }
+
+      const diff = gameState.scores.player - gameState.scores.bot;
+      if (diff > 0) {
+        els.leadBadge.textContent = `领先 +${diff}`;
+        els.leadBadge.className = 'text-xs font-bold px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300';
+        els.leadBadge.classList.remove('is-hidden');
+      } else if (diff < 0) {
+        els.leadBadge.textContent = `落后 ${diff}`;
+        els.leadBadge.className = 'text-xs font-bold px-2 py-0.5 rounded-full bg-red-500/20 text-red-300';
+        els.leadBadge.classList.remove('is-hidden');
+      } else {
+        els.leadBadge.textContent = '势均力敌';
+        els.leadBadge.className = 'text-xs font-bold px-2 py-0.5 rounded-full bg-slate-500/20 text-slate-300';
+        els.leadBadge.classList.remove('is-hidden');
+      }
+    }
+
+    function updateComboDisplay() {
+      if (gameState.combos.player >= 2) {
+        els.playerCombo.textContent = `${gameState.combos.player} 连击`;
+        els.playerCombo.classList.remove('is-hidden');
+        els.playerCombo.classList.add('combo-show');
+      } else {
+        els.playerCombo.classList.add('is-hidden');
+      }
+      if (gameState.combos.bot >= 2) {
+        els.botCombo.textContent = `${gameState.combos.bot} 连击`;
+        els.botCombo.classList.remove('is-hidden');
+        els.botCombo.classList.add('combo-show');
+      } else {
+        els.botCombo.classList.add('is-hidden');
+        els.botCombo.classList.remove('combo-show');
+      }
+    }
+
+    function showScorePop(element, points, isCrit = false) {
+      const label = points > 0 ? `+${points}${isCrit ? ' 暴击!' : ''}` : '+0';
+      element.textContent = label;
+      element.classList.remove('score-pop');
+      void element.offsetWidth;
+      element.classList.add('score-pop');
+    }
+
+    function updateTimerUI(remainingMs) {
+      const ratio = Math.max(remainingMs, 0) / COUNTDOWN_MS;
+      els.timerProgress.style.strokeDashoffset = CIRCUMFERENCE * (1 - ratio);
+      els.countdownNum.textContent = (Math.max(remainingMs, 0) / 1000).toFixed(1);
+      const sec = Math.ceil(remainingMs / 1000);
+      if (remainingMs > 0 && remainingMs <= 3000 && sec !== gameState.lastSfxTickSecond) {
+        gameState.lastSfxTickSecond = sec;
+        sfxTick();
+      }
+      if (remainingMs <= 3000) {
+        els.countdownNum.classList.add('text-red-400');
+      } else {
+        els.countdownNum.classList.remove('text-red-400');
+      }
+    }
+
+    function recordCategoryResult(category, isCorrect) {
+      if (!gameState.categoryStats[category]) {
+        gameState.categoryStats[category] = { correct: 0, total: 0 };
+      }
+      gameState.categoryStats[category].total += 1;
+      if (isCorrect) gameState.categoryStats[category].correct += 1;
+    }
+
+    function renderCategoryTag(category) {
+      const label = CATEGORY_LABELS[category] || category;
+      els.questionCategory.textContent = label;
+      els.questionCategory.className = `text-[10px] px-2 py-0.5 rounded-full font-semibold category-tag-${category === 'geography' ? 'geo' : category === 'culture' ? 'culture' : category === 'history' ? 'history' : 'lang'}`;
+    }
+
+    // ============================================================
+    // === 匹配流程 ===
+    // ============================================================
+    function startMatch() {
+      clearTimers();
+      gameState.opponent = pickOpponent();
+      const opp = gameState.opponent;
+
+      els.matchName.textContent = opp.name;
+      els.matchFlag.textContent = opp.flag;
+      els.matchMeta.textContent = '全球匹配 · 文化对决';
+      els.matchRank.innerHTML = `<i class="fa-solid fa-medal mr-1"></i>${opp.rank}`;
+      els.matchAvatar.textContent = opp.flag;
+      els.opponentPreview.classList.remove('opponent-card-enter');
+      els.opponentPreview.style.opacity = '0';
+
+      showScreen('matching');
+
+      addTimer(setTimeout(() => {
+        els.opponentPreview.style.opacity = '1';
+        els.opponentPreview.classList.add('opponent-card-enter');
+        sfxMatch();
+        vibrate(30);
+      }, 400));
+
+      addTimer(setTimeout(() => startRound(), 3000));
+    }
+
+    function startRound() {
+      gameState.questions = shuffle(QUESTION_BANK).slice(0, QUESTIONS_PER_ROUND);
+      gameState.currentIndex = 0;
+      gameState.scores = { player: 0, bot: 0 };
+      gameState.combos = { player: 0, bot: 0 };
+      gameState.categoryStats = {};
+
+      const opp = gameState.opponent;
+      els.botDisplayName.textContent = opp.name;
+      els.battleBotAvatar.textContent = opp.flag;
+      els.finalBotName.textContent = opp.name;
+
+      updateScoreBars();
+      updateComboDisplay();
+      showScreen('battle');
+      startQuestion();
+    }
+
+    // ============================================================
+    // === 对战流程 ===
+    // ============================================================
+    function startQuestion() {
+      clearTimers();
+      const q = gameState.questions[gameState.currentIndex];
+
+      gameState.phase = 'question';
+      gameState.playerAnswer = null;
+      gameState.botAnswer = null;
+      gameState.optionsLocked = false;
+      gameState.remainingMs = COUNTDOWN_MS;
+      gameState.questionStartAt = performance.now();
+      gameState.lastSfxTickSecond = -1;
+      gameState.botScheduledForIndex = gameState.currentIndex;
+
+      els.botStatus.classList.remove('is-hidden');
+      els.botStatus.textContent = '思考中...';
+
+      els.questionIndex.textContent = `第 ${gameState.currentIndex + 1}/${QUESTIONS_PER_ROUND} 题`;
+      els.questionText.textContent = q.text;
+      renderCategoryTag(q.category);
+      updateTimerUI(COUNTDOWN_MS);
+
+      els.optionsContainer.innerHTML = '';
+      q.options.forEach((opt, idx) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.dataset.index = idx;
+        btn.className = 'option-btn';
+        btn.innerHTML = `<span class="opt-letter">${optionLetter(idx)}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${opt}</span>`;
+        btn.addEventListener('click', () => onPlayerAnswer(idx, btn));
+        els.optionsContainer.appendChild(btn);
+      });
+
+      startCountdownLoop();
+      scheduleBotAnswer();
+    }
+
+    function startCountdownLoop() {
+      const tick = () => {
+        if (gameState.phase === 'reveal') return;
+        const elapsed = performance.now() - gameState.questionStartAt;
+        gameState.remainingMs = Math.max(COUNTDOWN_MS - elapsed, 0);
+        updateTimerUI(gameState.remainingMs);
+
+        if (gameState.remainingMs <= 0) {
+          onCountdownEnd();
+          return;
+        }
+        gameState.countdownRaf = requestAnimationFrame(tick);
+      };
+      gameState.countdownRaf = requestAnimationFrame(tick);
+    }
+
+    /** Bot 独立作答：不阻塞玩家，到点自动计分 */
+    function scheduleBotAnswer() {
+      const qIndex = gameState.currentIndex;
+      const q = gameState.questions[qIndex];
+      gameState.botScheduledForIndex = qIndex;
+      const delay = 1500 + Math.random() * 3000;
+
+      addTimer(
+        setTimeout(() => {
+          if (gameState.botScheduledForIndex !== qIndex) return;
+          resolveBotAnswer(qIndex, q);
+        }, delay)
+      );
+    }
+
+    function resolveBotAnswer(qIndex, q) {
+      const remainingMs =
+        qIndex === gameState.currentIndex && gameState.phase !== 'reveal'
+          ? gameState.remainingMs
+          : Math.floor(COUNTDOWN_MS * (0.3 + Math.random() * 0.5));
+
+      const wrong = [0, 1, 2, 3].filter((i) => i !== q.correct);
+      const botAnswer = Math.random() < 0.6 ? q.correct : wrong[Math.floor(Math.random() * wrong.length)];
+
+      if (qIndex === gameState.currentIndex) {
+        gameState.botAnswer = botAnswer;
+        els.botStatus.textContent = '已作答 ✓';
+        els.botStatus.classList.remove('bot-thinking');
+        const botBtn = els.optionsContainer.querySelector(`[data-index="${botAnswer}"]`);
+        if (botBtn) botBtn.classList.add('option-bot-pick');
+      }
+
+      const botCorrect = botAnswer === q.correct;
+      if (botCorrect) gameState.combos.bot += 1;
+      else gameState.combos.bot = 0;
+
+      let botBase = calcBaseScore(botAnswer, q.correct, remainingMs);
+      const botTimeMs = COUNTDOWN_MS - remainingMs;
+      const botCrit = botCorrect && botTimeMs < 2000 && Math.random() < 0.15;
+      if (botCrit) botBase = Math.round(botBase * 1.5);
+      const botPoints = calcFinalScore(botBase, gameState.combos.bot);
+
+      gameState.scores.bot += botPoints;
+      showScorePop(els.botScorePop, botPoints, botCrit);
+      updateScoreBars(0, botPoints);
+      updateComboDisplay();
+      vibrate(20);
+    }
+
+    function lockOtherOptions(selectedBtn) {
+      gameState.optionsLocked = true;
+      els.optionsContainer.querySelectorAll('.option-btn').forEach((btn) => {
+        if (btn !== selectedBtn) btn.classList.add('option-locked');
+      });
+    }
+
+    function onPlayerAnswer(index, btn) {
+      if (gameState.phase !== 'question' || gameState.playerAnswer !== null || gameState.optionsLocked) return;
+      gameState.playerAnswer = index;
+      gameState.playerRemainingMs = gameState.remainingMs;
+      btn.classList.add('option-picked', 'option-player-pick');
+      lockOtherOptions(btn);
+      vibrate(15);
+      finalizePlayerTurn();
+    }
+
+    function onCountdownEnd() {
+      if (gameState.phase === 'reveal') return;
+      finalizePlayerTurn();
+    }
+
+    /** 玩家选题后立即揭晓并进入下一题（不等 Bot） */
+    function finalizePlayerTurn() {
+      if (gameState.phase === 'reveal') return;
+      gameState.phase = 'reveal';
+      clearTimers();
+
+      const q = gameState.questions[gameState.currentIndex];
+      const optionBtns = els.optionsContainer.querySelectorAll('.option-btn');
+
+      sfxReveal();
+      vibrate([30, 50, 30]);
+      optionBtns.forEach((btn) => btn.classList.add('pointer-events-none'));
+
+      optionBtns.forEach((btn, idx) => {
+        btn.style.opacity = '';
+        btn.style.borderColor = '';
+        if (idx === q.correct) {
+          btn.classList.add('option-correct');
+          btn.classList.remove('option-picked');
+        } else if (gameState.playerAnswer === idx && idx !== q.correct) {
+          btn.style.opacity = '0.45';
+          btn.style.borderColor = 'rgba(248, 113, 113, 0.5)';
+        }
+      });
+
+      const playerCorrect = gameState.playerAnswer === q.correct;
+      if (playerCorrect) {
+        gameState.combos.player += 1;
+        sfxCorrect();
+      } else {
+        gameState.combos.player = 0;
+        if (gameState.playerAnswer !== null) sfxWrong();
+      }
+      recordCategoryResult(q.category, playerCorrect);
+
+      let playerBase = calcBaseScore(
+        gameState.playerAnswer,
+        q.correct,
+        gameState.playerRemainingMs
+      );
+      const playerTimeMs = COUNTDOWN_MS - gameState.playerRemainingMs;
+      const playerCrit = playerCorrect && playerTimeMs < 2000 && Math.random() < 0.15;
+      if (playerCrit) playerBase = Math.round(playerBase * 1.5);
+      const playerPoints = calcFinalScore(playerBase, gameState.combos.player);
+
+      gameState.scores.player += playerPoints;
+      showScorePop(els.playerScorePop, playerPoints, playerCrit);
+      updateScoreBars(playerPoints, 0);
+      updateComboDisplay();
+
+      addTimer(setTimeout(() => goToNextQuestion(), PLAYER_NEXT_MS));
+    }
+
+    function goToNextQuestion() {
+      gameState.currentIndex += 1;
+      if (gameState.currentIndex < QUESTIONS_PER_ROUND) startQuestion();
+      else showResult();
+    }
+
+    // ============================================================
+    // === 结算 ===
+    // ============================================================
+    function showResult() {
+      clearTimers();
+      const { player, bot } = gameState.scores;
+      els.finalPlayerScore.textContent = player;
+      els.finalBotScore.textContent = bot;
+
+      if (player > bot) {
+        els.resultTitle.textContent = 'Victory';
+        els.resultSubtitle.textContent = '胜利';
+        els.resultIcon.className = 'fa-solid fa-trophy text-6xl text-yellow-400 mb-4';
+        sfxCorrect();
+      } else if (player < bot) {
+        els.resultTitle.textContent = 'Defeat';
+        els.resultSubtitle.textContent = '失败';
+        els.resultIcon.className = 'fa-solid fa-skull text-6xl text-red-400 mb-4';
+        sfxWrong();
+      } else {
+        els.resultTitle.textContent = 'Draw';
+        els.resultSubtitle.textContent = '平局';
+        els.resultIcon.className = 'fa-solid fa-handshake text-6xl text-cyan-400 mb-4';
+      }
+
+      renderWeakAnalysis();
+      vibrate(player > bot ? [50, 30, 50] : 80);
+      showScreen('result');
+    }
+
+    function renderWeakAnalysis() {
+      const stats = gameState.categoryStats;
+      const weak = Object.entries(stats)
+        .filter(([, s]) => s.total > 0 && s.correct / s.total < 1)
+        .map(([cat, s]) => ({
+          cat,
+          rate: Math.round((s.correct / s.total) * 100),
+          label: CATEGORY_LABELS[cat] || cat
+        }))
+        .sort((a, b) => a.rate - b.rate);
+
+      if (weak.length === 0) {
+        els.weakAnalysis.classList.add('is-hidden');
+        return;
+      }
+
+      els.weakList.innerHTML = weak
+        .map((w) => `<li>${w.label}：正确率 ${w.rate}%（建议多练）</li>`)
+        .join('');
+      els.weakAnalysis.classList.remove('is-hidden');
+    }
+
+    function resetGame() {
+      clearTimers();
+      gameState.currentIndex = 0;
+      gameState.scores = { player: 0, bot: 0 };
+      gameState.combos = { player: 0, bot: 0 };
+      gameState.phase = 'question';
+      gameState.categoryStats = {};
+      els.leadBadge.classList.add('is-hidden');
+      els.weakAnalysis.classList.add('is-hidden');
+      els.playerCombo.classList.add('is-hidden');
+      els.botCombo.classList.add('is-hidden');
+      updateScoreBars();
+      showScreen('home');
+    }
+
+    // ============================================================
+    // === 初始化 ===
+    // ============================================================
+    document.getElementById('btn-match').addEventListener('click', () => { ensureAudio(); startMatch(); });
+    document.getElementById('btn-invite').addEventListener('click', () => { ensureAudio(); startMatch(); });
+    document.getElementById('btn-replay').addEventListener('click', resetGame);
+
+    // 禁止页面整体被拖动滚动（iOS 橡皮筋）
+    document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+
+    els.timerProgress.style.strokeDasharray = CIRCUMFERENCE;
+    updateTimerUI(COUNTDOWN_MS);
+  </script>
+</body>
+</html>
